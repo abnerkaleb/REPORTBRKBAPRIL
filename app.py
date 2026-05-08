@@ -11,8 +11,8 @@ st.set_page_config(layout="wide")
 
 credentials = {
     "usernames": {
-        "equipe": {
-            "name": "Legalerbe",
+        "legalerbe": {
+            "name": "legalerbe",
             "password": "Erbe@17007"
         }
     }
