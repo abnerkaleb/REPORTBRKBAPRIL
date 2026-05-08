@@ -13,7 +13,7 @@ credentials = {
     "usernames": {
         "legalerbe": {
             "name": "legalerbe",
-            "password": "Erbe@17007"
+            "password": "Erbe@3009"
         }
     }
 }
