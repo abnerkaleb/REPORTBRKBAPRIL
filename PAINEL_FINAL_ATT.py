@@ -14,9 +14,9 @@ st.set_page_config(page_title="Report Mensal Erbe - Jurídico", layout="wide")
 # =========================
 credentials = {
     "usernames": {
-        "equipe": {
-            "name": "Equipe",
-            "password": "123456"
+        "legalerbe": {
+            "name": "legalerbe",
+            "password": "Erbe@17007"
         }
     }
 }
