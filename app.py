@@ -264,7 +264,7 @@ elif authentication_status:
             st.table(pd.DataFrame({
                 "Subject":["Civil","Tax","Labor","Construction"],
                 "Rate":["TJ+1%","Selic","TST+1%","INCC"],
-                "Last 12 Months":["16.8%","14.5%","16.8%","6.28%"]
+                "12M":["16.8%","14.5%","16.8%","5.8%"]
             }))
 
     # =========================
@@ -363,7 +363,7 @@ elif authentication_status:
         st.title("New Claims")
         acumulado_new_claims = df_bp["Valor Pedido.1"].sum()
         acumulado_new_claims = (acumulado_new_claims/1000000).round(2)
-        values = [54.4,4.9,acumulado_new_claims]  # ALTERE AQUI O VALOR DO MEIO
+        values = [54.4,9.2,acumulado_new_claims]  # ALTERE AQUI O VALOR DO MEIO
 
         fig = go.Figure()
 
