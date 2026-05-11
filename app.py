@@ -3,7 +3,36 @@ import streamlit_authenticator as stauth
 import plotly.graph_objects as go
 import pandas as pd
 
-st.set_page_config(layout="wide")
+
+# ===============================
+# CONFIG
+# ===============================
+st.set_page_config(page_title="Report Mensal Erbe - Jurídico", layout="wide")
+
+# --- INJEÇÃO DE ESTILO PARA FONTE GLOBAL ---
+st.markdown("""
+    <style>
+    /* Aumenta a fonte base do corpo do app */
+    html, body, [class*="ViewContainer"] {
+        font-size: 1.15rem; 
+    }
+
+    /* Aumenta especificamente o texto das tabelas e dataframes */
+    .stTable, .stDataFrame td, .stDataFrame th {
+        font-size: 18px !important;
+    }
+
+    /* Títulos e Subtítulos */
+    h1 { font-size: 2.8rem !important; }
+    h2 { font-size: 2.2rem !important; }
+    h3 { font-size: 1.8rem !important; }
+
+    /* Texto da Sidebar */
+    section[data-testid="stSidebar"] .stMarkdown p {
+        font-size: 1.2rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # =========================
 # LOGIN
@@ -11,9 +40,9 @@ st.set_page_config(layout="wide")
 
 credentials = {
     "usernames": {
-        "legalerbe": {
-            "name": "legalerbe",
-            "password": "Erbe@3009"
+        "equipe": {
+            "name": "Equipe",
+            "password": "123456"
         }
     }
 }
@@ -354,107 +383,113 @@ elif authentication_status:
         st.plotly_chart(fig, use_container_width=True)
 
     # =========================
-    # PAGE 3 — NEW CLAIMS
+    # PAGE 3 — NEW CLAIMS (CORRIGIDO)
     # =========================
     elif pagina == "New Claims":
         df_bp = pd.read_excel("POS_BP.xlsx")
         df_bp["Data de cadastro"] = pd.to_datetime(df_bp["Data de cadastro"], dayfirst=True, errors="coerce")
         
         st.title("New Claims")
+        
+        # --- CÁLCULOS DO GRÁFICO SUPERIOR ---
         acumulado_new_claims = df_bp["Valor Pedido.1"].sum()
         acumulado_new_claims = (acumulado_new_claims/1000000).round(2)
-        values = [54.4,9.2,acumulado_new_claims]  # ALTERE AQUI O VALOR DO MEIO
+        values_top = [54.4, 9.2, acumulado_new_claims] 
 
-        fig = go.Figure()
-
-        fig.add_trace(go.Bar(
+        fig_top = go.Figure()
+        fig_top.add_trace(go.Bar(
             x=["Budget","Forecast","Actual"],
-            y=values,
+            y=values_top,
             marker_color=[COLORS["magenta"], COLORS["blue_medium"], COLORS["blue_light"]],
-            text=values,
+            text=values_top,
             textposition="outside"
         ))
-
-        perc = (values[2]/values[1] - 1)*100
-
-        # índices das barras
-        # índices das barras
-        x0 = 1  # Forecast
-        x1 = 2  # Actual
-
-        y0 = values[1]
-        y1 = values[2]
-
-        # linha inclinada
-        fig.add_shape(
-            type="line",
-            x0=x0,
-            y0=y0,
-            x1=x1,
-            y1=y1,
-            line=dict(color="black", width=2, dash="dot")
-        )
-
         
+        # Linha pontilhada e porcentagem
+        perc = (values_top[2]/values_top[1] - 1)*100
+        fig_top.add_shape(type="line", x0=1, y0=values_top[1], x1=2, y1=values_top[2],
+                          line=dict(color="black", width=2, dash="dot"))
+        fig_top.add_annotation(x=1.5, y=(values_top[1]+values_top[2])/2, text=f"{perc:.2f}%", showarrow=False, yshift=10)
+        
+        st.plotly_chart(fig_top, use_container_width=True)
 
-        # texto
-        fig.add_annotation(
-            x=(x0 + x1)/2,
-            y=(y0 + y1)/2,
-            text=f"{perc:.2f}%",
-            showarrow=False,
-            yshift=10
-        )
+        # --- PROCESSAMENTO POR NATUREZA ---
+        df_bp["Macro Assunto"] = df_bp["Macro Assunto"].fillna("Demais").astype(str).str.strip()
+        df_bp["Macro Assunto"] = df_bp["Macro Assunto"].replace(["", "nan", "None"], "Demais")
 
-        st.plotly_chart(fig, use_container_width=True)
-
-        # ===== TRATAMENTO NOVO =====
-        # trata NaN e vazios corretamente
-        df_bp["Macro Assunto"] = df_bp["Macro Assunto"].where(
-            df_bp["Macro Assunto"].notna(), "Demais"
-            )
-
-        df_bp["Macro Assunto"] = df_bp["Macro Assunto"].astype(str).str.strip()
-
-        df_bp["Macro Assunto"] = df_bp["Macro Assunto"].replace(
-            ["", "nan", "None"], "Demais")
-
-        # inclui "Demais"
-        tipos = ["Cível","Property Tax","Labor","Delay","FAR","Construction","Tax","Demais","Total"]
-
-        total_risk = df_bp.groupby("Macro Assunto")["Valor Pedido Atualizado"].sum()
-        expected_loss = df_bp.groupby("Macro Assunto")["Valor Pedido.1"].sum()
+        tipos_base = ["Cível", "Property Tax", "Labor", "Delay", "FAR", "Construction", "Tax", "Demais"]
+        
+        # Realiza os agrupamentos
+        total_risk = df_bp.groupby("Macro Assunto")["Valor Pedido Atualizado"].sum() / 1000000
+        expected_loss = df_bp.groupby("Macro Assunto")["Valor Pedido.1"].sum() / 1000000
         quantidade = df_bp.groupby("Macro Assunto").size()
 
-        total_risk = (total_risk/1000000).round(2)
-        expected_loss = (expected_loss/1000000).round(2)
+        # Reindexa para garantir a ordem e preenche vazios com 0
+        tr_vals = total_risk.reindex(tipos_base, fill_value=0).round(2).tolist()
+        el_vals = expected_loss.reindex(tipos_base, fill_value=0).round(2).tolist()
+        qt_vals = quantidade.reindex(tipos_base, fill_value=0).tolist()
 
-        total_risk_vals = total_risk.reindex(tipos[:-1], fill_value=0).tolist()
-        expected_loss_vals = expected_loss.reindex(tipos[:-1], fill_value=0).tolist()
-        quantidade_vals = quantidade.reindex(tipos[:-1], fill_value=0).tolist()
+        # Adiciona o Total
+        tipos = tipos_base + ["Total"]
+        tr_vals.append(round(sum(tr_vals), 2))
+        el_vals.append(round(sum(el_vals), 2))
+        qt_vals.append(sum(qt_vals))
 
-        total_risk_vals.append(sum(total_risk_vals))
-        expected_loss_vals.append(sum(expected_loss_vals))
-        quantidade_vals.append(sum(quantidade_vals))
+        st.write("### New Claims by Nature")
 
-        st.table(pd.DataFrame({
-            "Tipo": tipos,
-            "Total Risk": total_risk_vals,
-            "Expected Loss": expected_loss_vals
-        }))
+        # --- CRIAÇÃO DA TABELA ALINHADA COM RÓTULOS ---
+        # Definimos as colunas: a primeira para os rótulos, as outras para os dados
+        col_label, *col_dat = st.columns([1.5] + [1] * len(tipos))
 
-        fig2 = go.Figure()
+        # LINHA 1: Cabeçalhos
+        with col_label:
+            st.write("") 
+        for i, col in enumerate(col_dat):
+            with col:
+                st.markdown(f"<div style='text-align: center'><b>{tipos[i]}</b></div>", unsafe_allow_html=True)
+        
+        st.divider()
 
-        fig2.add_trace(go.Bar(
-            x=tipos,
-            y=quantidade_vals,
-            marker_color=COLORS["blue_dark"],
-            text=quantidade_vals,
-            textposition="outside"
-        ))
+        # LINHA 2: Total Risk
+        with col_label:
+            st.markdown("<div style='padding: 5px 0;'><b>Total Risk</b></div>", unsafe_allow_html=True)
+        for i, col in enumerate(col_dat):
+            with col:
+                st.markdown(f"<div style='text-align: center; color: gray;'>{tr_vals[i]}</div>", unsafe_allow_html=True)
 
-        st.plotly_chart(fig2, use_container_width=True)
+        st.divider()
 
+        # LINHA 3: Expected Loss
+        with col_label:
+            st.markdown("<div style='padding: 5px 0;'><b>Expected Loss</b></div>", unsafe_allow_html=True)
+        for i, col in enumerate(col_dat):
+            with col:
+                st.markdown(f"<div style='text-align: center; font-weight: bold;'>{el_vals[i]}</div>", unsafe_allow_html=True)
+
+        st.divider()
+
+        # LINHA 4: Gráficos de Barras
+        with col_label:
+            st.markdown("<br><br><b>Number of<br>Claims</b>", unsafe_allow_html=True)
+        for i, col in enumerate(col_dat):
+            with col:
+                fig_mini = go.Figure(go.Bar(
+                    x=[tipos[i]], 
+                    y=[qt_vals[i]],
+                    marker_color=COLORS["blue_dark"],
+                    text=[qt_vals[i]],
+                    textposition="outside"
+                ))
+                
+                fig_mini.update_layout(
+                    height=180, 
+                    margin=dict(l=5, r=5, t=30, b=0),
+                    yaxis=dict(visible=False, range=[0, max(qt_vals) * 1.3]),
+                    xaxis=dict(visible=False),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
     # =========================
     # PAGE 4 — RESOLVED
     # =========================

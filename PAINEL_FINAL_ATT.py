@@ -9,14 +9,39 @@ import streamlit_authenticator as stauth
 # ===============================
 st.set_page_config(page_title="Report Mensal Erbe - Jurídico", layout="wide")
 
+# --- INJEÇÃO DE ESTILO PARA FONTE GLOBAL ---
+st.markdown("""
+    <style>
+    /* Aumenta a fonte base do corpo do app */
+    html, body, [class*="ViewContainer"] {
+        font-size: 1.15rem; 
+    }
+
+    /* Aumenta especificamente o texto das tabelas e dataframes */
+    .stTable, .stDataFrame td, .stDataFrame th {
+        font-size: 18px !important;
+    }
+
+    /* Títulos e Subtítulos */
+    h1 { font-size: 2.8rem !important; }
+    h2 { font-size: 2.2rem !important; }
+    h3 { font-size: 1.8rem !important; }
+
+    /* Texto da Sidebar */
+    section[data-testid="stSidebar"] .stMarkdown p {
+        font-size: 1.2rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # =========================
 # LOGIN
 # =========================
 credentials = {
     "usernames": {
-        "legalerbe": {
-            "name": "legalerbe",
-            "password": "Erbe@3009"
+        "equipe": {
+            "name": "Equipe",
+            "password": "123456"
         }
     }
 }
@@ -195,7 +220,99 @@ elif authentication_status:
     tabela = tabela.replace(0, "").replace("0", "")
 
     st.subheader(f"Movimentação - {fim.strftime('%b/%y')}")
-    st.dataframe(tabela, use_container_width=True)
+    st.dataframe(tabela, use_container_width=True, hide_index=True)
+
+    # =========================
+    # PROCESSAMENTO DA TABELA
+    # =========================
+
+    def gerar_tabela_desembolso():
+        # 1. Carregar os dados
+        try:
+            df_set = pd.read_excel("SETTLED_MENSAL.xlsx")
+        except FileNotFoundError:
+            st.error("Arquivo SETTLED_MENSAL.xlsx não encontrado.")
+            return
+
+        # 2. Agrupamento e Cálculos Base
+        # Settled = Acordos, Won = Casos ganhos, Lost = Perdidos
+        # Mapeamento para os nomes da imagem
+        mapeamento = {
+            "Won": "Casos ganhos*",
+            "Settled": "Acordos**",
+            "Lost": "Perdidos"
+        }
+
+        # Agrupar e somar
+        resumo = df_set.groupby("Macro encerramento").agg({
+            "Soma_Valor_Lancamento": "sum",       # BP Atualizado
+            "Valor Pedido Objeto Corrigido": "sum" # Fcx Real
+        }).reset_index()
+
+        # Aplicar o mapeamento de nomes
+        resumo["Baixa provisória e encerrados"] = resumo["Macro encerramento"].map(mapeamento)
+        
+        # Contagem de casos (Coluna da esquerda na imagem)
+        contagem = df_set.groupby("Macro encerramento").size().reset_index(name="qtd")
+        resumo = resumo.merge(contagem, on="Macro encerramento")
+
+        # 3. Formatação dos valores (dividir por 1 milhão e 1 casa decimal)
+        resumo["BP atualizado"] = (resumo["Soma_Valor_Lancamento"] / 1000000)
+        resumo["Fcx Real"] = (resumo["Valor Pedido Objeto Corrigido"] / 1000000)
+
+        # 4. Cálculos de Delta e %
+        resumo["Δ"] = resumo["BP atualizado"] - resumo["Fcx Real"]
+        resumo["%"] = (resumo["Δ"] / resumo["BP atualizado"]) * 100
+
+        # 5. Organizar as colunas e ordenar conforme a imagem
+        # Ordem desejada: Casos Ganhos, Acordos, Perdidos
+        ordem = ["Casos ganhos*", "Acordos**", "Perdidos"]
+        resumo["ordem_aux"] = resumo["Baixa provisória e encerrados"].map({v: i for i, v in enumerate(ordem)})
+        resumo = resumo.sort_values("ordem_aux").drop(columns=["Macro encerramento", "Soma_Valor_Lancamento", "Valor Pedido Objeto Corrigido", "ordem_aux"])
+
+        # 6. Linha de Total
+        total_qtd = resumo["qtd"].sum()
+        total_bp = resumo["BP atualizado"].sum()
+        total_fcx = resumo["Fcx Real"].sum()
+        total_delta = total_bp - total_fcx
+        total_perc = (total_delta / total_bp) * 100 if total_bp != 0 else 0
+
+        linha_total = pd.DataFrame({
+            "qtd": [total_qtd],
+            "Baixa provisória e encerrados": ["Total"],
+            "BP atualizado": [total_bp],
+            "Fcx Real": [total_fcx],
+            "Δ": [total_delta],
+            "%": [total_perc]
+        })
+
+        tabela_final = pd.concat([resumo, linha_total], ignore_index=True)
+
+        # =========================
+        # EXIBIÇÃO NO STREAMLIT
+        # =========================
+
+        st.markdown("### Desembolso e Fluxo de Caixa")
+        
+        
+
+        # Formatação final para exibição
+        df_display = tabela_final.copy()
+        
+        # Formata as colunas numéricas para 1 casa decimal e o % com símbolo
+        for col in ["BP atualizado", "Fcx Real", "Δ"]:
+            df_display[col] = df_display[col].map("{:.1f}".format)
+        
+        df_display["%"] = df_display["%"].map("{:.0f}%".format)
+
+        # Renomeia as colunas para o display
+        df_display.columns = ["", "Baixa provisória e encerrados", "BP atualizado", "Fcx Real", "Δ", "%"]
+
+        # Exibe a tabela sem o index do pandas
+        st.table(df_display)
+
+    # Chamar a função dentro do bloco 'Resolved' do seu app
+    gerar_tabela_desembolso()
 
     # ===============================
     # GRÁFICO 1
@@ -210,10 +327,13 @@ elif authentication_status:
         .sort_values(by="quantidade", ascending=False)
     )
 
-    st.plotly_chart(
-        px.bar(graf1, x="macro assunto", y="quantidade"),
-        use_container_width=True
-    )
+    # Criamos o objeto do gráfico primeiro para configurar as traces
+    fig_bar = px.bar(graf1, x="macro assunto", y="quantidade", text="quantidade")
+
+    # Ajusta para o texto ficar acima da barra
+    fig_bar.update_traces(textposition='outside')
+
+    st.plotly_chart(fig_bar, use_container_width=True)
 
     # ===============================
     # GRÁFICO 2
@@ -239,104 +359,72 @@ elif authentication_status:
     )
 
     # ===============================
-
-    # GRÁFICO 3
-
+    # GRÁFICO 3 (Ajustado)
     # ===============================
-
     st.subheader("Entradas vs Encerrados (2026)")
 
-
-
     # REMOVE DUPLICIDADE (CRÍTICO)
-
     df_grafico = df.sort_values("Data Cálculo", ascending=False)
-
     df_grafico = df_grafico.drop_duplicates(subset="Pasta", keep="first")
 
-
-
     # Entradas
-
     entradas_2026 = (
-
         df_grafico[df_grafico["Data de cadastro"].dt.year == 2026]
-
         .dropna(subset=["Data de cadastro"])
-
         .groupby(pd.Grouper(key="Data de cadastro", freq="MS"))
-
         .size()
-
         .reset_index(name="Entradas")
-
         .rename(columns={"Data de cadastro": "Data"})
-
     )
-
-
 
     # Encerrados
-
     encerrados_2026 = (
-
         df_grafico[df_grafico["Data de Encerramento"].dt.year == 2026]
-
         .dropna(subset=["Data de Encerramento"])
-
         .groupby(pd.Grouper(key="Data de Encerramento", freq="MS"))
-
         .size()
-
         .reset_index(name="Encerrados")
-
         .rename(columns={"Data de Encerramento": "Data"})
-
     )
-
-
 
     # Merge
-
     graf3 = pd.merge(entradas_2026, encerrados_2026, on="Data", how="outer")
-
-
-
     graf3["Entradas"] = graf3["Entradas"].fillna(0)
-
     graf3["Encerrados"] = graf3["Encerrados"].fillna(0)
 
-
-
     # Meses completos
-
     meses_2026 = pd.date_range("2026-01-01", "2026-12-31", freq="MS")
 
-
-
     graf3 = (
-
         graf3
-
         .set_index("Data")
-
         .reindex(meses_2026, fill_value=0)
-
         .reset_index()
-
         .rename(columns={"index": "Data"})
-
     )
 
+    # --- MODIFICAÇÕES AQUI ---
 
-
-    st.plotly_chart(
-
-        px.line(graf3, x="Data", y=["Entradas", "Encerrados"], markers=True),
-
-        use_container_width=True
-
+    # 1. Adicionamos 'text' para exibir os números sobre os pontos
+    fig_temporal = px.line(
+        graf3, 
+        x="Data", 
+        y=["Entradas", "Encerrados"], 
+        markers=True,
+        text="value" # Exibe o valor de cada ponto
     )
+
+    # 2. Configura o Eixo X para mostrar todos os meses (M1)
+    fig_temporal.update_xaxes(
+        dtick="M1", 
+        tickformat="%b/%y", # Formato: Jan/26
+        tickmode="linear"
+    )
+
+    # 3. Ajusta a posição do texto para não ficar em cima da linha
+    fig_temporal.update_traces(textposition="top center")
+
+    st.plotly_chart(fig_temporal, use_container_width=True)
     # ===============================
     # ASSUMPTIONS
     # ===============================
@@ -355,7 +443,7 @@ elif authentication_status:
                     lambda v: f"R$ {v/1000000:.2f}M" if pd.notnull(v) else ""
                 )
 
-        st.dataframe(assumptions, use_container_width=True)
+        st.dataframe(assumptions, use_container_width=True, hide_index=True)
 
     else:
         st.info("Arquivo assumptions_26_slides.xlsx não encontrado.")
