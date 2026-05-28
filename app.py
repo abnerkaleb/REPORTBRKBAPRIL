@@ -40,16 +40,16 @@ st.markdown("""
 
 credentials = {
     "usernames": {
-        "equipe": {
-            "name": "Equipe",
-            "password": "123456"
+        "ControladoriaErbe": {
+            "name": "ControladoriaErbe",
+            "password": "Erbe@3009"
         }
     }
 }
 
 authenticator = stauth.Authenticate(
     credentials,
-    "meu_app",
+    "meu_appv2",
     "abc123",
     cookie_expiry_days=1
 )
@@ -293,7 +293,7 @@ elif authentication_status:
             st.table(pd.DataFrame({
                 "Subject":["Civil","Tax","Labor","Construction"],
                 "Rate":["TJ+1%","Selic","TST+1%","INCC"],
-                "Last 12 Months":["16.14%","14.91%","16.14%","6.28%"]
+                "12M":["16.8%","14.5%","16.8%","5.8%"]
             }))
 
     # =========================
@@ -394,7 +394,7 @@ elif authentication_status:
         # --- CÁLCULOS DO GRÁFICO SUPERIOR ---
         acumulado_new_claims = df_bp["Valor Pedido.1"].sum()
         acumulado_new_claims = (acumulado_new_claims/1000000).round(2)
-        values_top = [54.4, 4.9, acumulado_new_claims] 
+        values_top = [54.4, 9.2, acumulado_new_claims] 
 
         fig_top = go.Figure()
         fig_top.add_trace(go.Bar(
