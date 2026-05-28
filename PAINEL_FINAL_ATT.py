@@ -39,8 +39,8 @@ st.markdown("""
 # =========================
 credentials = {
     "usernames": {
-        "ControladoriaErbe": {
-            "name": "ControladoriaErbe",
+        "JuridicoErbe": {
+            "name": "JuridicoErbe",
             "password": "Erbe@3009"
         }
     }
@@ -489,7 +489,7 @@ elif authentication_status:
     # =========================================================================
 
     
-    DATA_ATUAL = pd.to_datetime("2026-03-26") #ALTERE AQUI
+    DATA_ATUAL = pd.to_datetime("2026-05-26") #ALTERE AQUI
 
     
     historico_manual = {
@@ -497,6 +497,8 @@ elif authentication_status:
         2: {"entradas": 130, "encerrados": 140},
         3: {"entradas": 160, "encerrados": 110},
     }
+
+    
     if DATA_ATUAL.day >= 26:
         data_fiscal_atual = DATA_ATUAL + pd.DateOffset(months=1)
     else:

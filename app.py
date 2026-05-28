@@ -40,8 +40,8 @@ st.markdown("""
 
 credentials = {
     "usernames": {
-        "ControladoriaErbe": {
-            "name": "ControladoriaErbe",
+        "JuridicoErbe": {
+            "name": "JuridicoErbe",
             "password": "Erbe@3009"
         }
     }
